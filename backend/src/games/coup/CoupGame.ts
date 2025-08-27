@@ -548,10 +548,7 @@ export class CoupGame implements IGame {
                     // Block challenge succeeded, block fails - continue with original action
                     state.pendingAction.blockedBy = undefined;
                     state.pendingAction.blockingCard = undefined;
-                    state.pendingAction.respondedPlayers = [
-                        ...(state.pendingAction.respondedPlayers || []),
-                        challenger.playerId,
-                    ];
+                    state.pendingAction.respondedPlayers = [challenger.playerId];
                     console.log("Updated pendingAction after successful block challenge:", state.pendingAction);
                     if (this.allPlayersHaveResponded(state)) {
                         this.resolvePendingAction(roomId, state);
