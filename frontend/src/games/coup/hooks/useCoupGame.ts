@@ -286,7 +286,7 @@ export const useCoupGame = (roomId: string | undefined): UseCoupGameReturn => {
 
     // Auto-select first opponent if none selected
     useEffect(() => {
-        if (!selectedTarget && aliveOpponents.length > 0) {
+        if ((!selectedTarget || !aliveOpponents.find(p => p.playerId === selectedTarget)) && aliveOpponents.length > 0) {
             setSelectedTarget(aliveOpponents[0].playerId);
         }
     }, [aliveOpponents, selectedTarget]);
