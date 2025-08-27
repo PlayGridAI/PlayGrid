@@ -33,6 +33,7 @@ export interface PendingAction {
     blockingCard?: string;
     challengeResolved?: boolean;
     successful?: boolean;
+    respondedPlayers?: string[];
 }
 
 export interface CoupGameState {

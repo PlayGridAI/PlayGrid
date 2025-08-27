@@ -17,6 +17,15 @@ export interface ActionLogEntry {
     turnNumber: number;
 }
 
+export interface PendingAction {
+    type: string;
+    fromPlayerId: string;
+    toPlayerId?: string;
+    blockedBy?: string;
+    respondedPlayers?: string[]; // Players who have responded to challenge/block
+    blockingCard?: CoupCard; // Specific card used for blocking
+}
+
 // Player-specific state
 interface CoupPlayer extends Player {
     coins: number;
@@ -32,14 +41,7 @@ export interface CoupGameState extends GameState {
     currentTurnPlayerId: string;
     turnNumber: number;
     actionLogs: ActionLogEntry[];
-    pendingAction?: {
-        type: string;
-        fromPlayerId: string;
-        toPlayerId?: string;
-        blockedBy?: string;
-        respondedPlayers?: string[]; // Players who have responded to challenge/block
-        blockingCard?: CoupCard; // Specific card used for blocking
-    };
+    pendingAction?: PendingAction;
     exchangeCards?: {
         playerId: string;
         cards: CoupCard[];

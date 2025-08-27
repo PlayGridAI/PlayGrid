@@ -151,10 +151,16 @@ export const ResponsiveActionPanel: React.FC<ResponsiveActionPanelProps> = ({
     );
   };
 
-  const showPendingAction = (pendingAction: any) => {
-    return pendingAction.blockedBy === undefined
-      ? myPlayerState?.playerId !== pendingAction.fromPlayerId
-      : pendingAction.blockedBy !== myPlayerState?.playerId;
+  const showPendingAction = (pendingAction: PendingAction) => {
+    const actionPerformedBy =
+      pendingAction.blockedBy === undefined
+        ? pendingAction.fromPlayerId
+        : pendingAction.blockedBy;
+    const responseGivenBy = pendingAction.respondedPlayers || [];
+    return (
+      actionPerformedBy !== myPlayerState?.playerId &&
+      !responseGivenBy.includes(myPlayerState?.playerId || "")
+    );
   };
 
   return (
