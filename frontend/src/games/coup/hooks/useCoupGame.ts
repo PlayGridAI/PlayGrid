@@ -175,6 +175,7 @@ export const useCoupGame = (roomId: string | undefined): UseCoupGameReturn => {
         };
 
         socket.on('game:state', handleGameState);
+        socket.on('game:stateUpdate', handleGameState); // Also listen to stateUpdate events
         socket.on('errorMessage', handleError);
         socket.on('player:disconnected', handlePlayerDisconnected);
         socket.on('player:reconnected', handlePlayerReconnected);
@@ -191,6 +192,7 @@ export const useCoupGame = (roomId: string | undefined): UseCoupGameReturn => {
 
         return () => {
             socket.off('game:state', handleGameState);
+            socket.off('game:stateUpdate', handleGameState); // Remove stateUpdate listener
             socket.off('errorMessage', handleError);
             socket.off('player:disconnected', handlePlayerDisconnected);
             socket.off('player:reconnected', handlePlayerReconnected);

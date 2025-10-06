@@ -707,6 +707,17 @@ export class CoupGame implements IGame {
             // auto-lose last card
             const lostCard = target.influence.pop()!;
             target.revealedCards.push(lostCard);
+            // Add action log for revealed card
+            this.addActionLog(roomId, state, target.name, "Card Revealed", undefined, `lost their last card: ${lostCard}.`);
+            
+            // Emit state update for automatic card loss
+            if (this.onEvent) {
+                this.onEvent(roomId, "coup:cardRevealed", {
+                    playerId: targetId,
+                    playerName: target.name,
+                    revealedCard: lostCard
+                });
+            }
         } else if (target.influence.length > 1) {
             if (this.onEvent) {
                 // In game mode: ask client which card to lose
@@ -721,6 +732,8 @@ export class CoupGame implements IGame {
                 // In test mode: auto-lose first card
                 const lostCard = target.influence.shift()!;
                 target.revealedCards.push(lostCard);
+                // Add action log for revealed card
+                this.addActionLog(roomId, state, target.name, "Card Revealed", undefined, `lost a card: ${lostCard}.`);
             }
         }
 
@@ -745,6 +758,9 @@ export class CoupGame implements IGame {
             player.influence.splice(cardIndex, 1);
         }
         player.revealedCards.push(chosenCard);
+
+        // Add action log for revealed card
+        this.addActionLog(roomId, state, player.name, "Card Revealed", undefined, `chose to lose a card: ${chosenCard}.`);
 
         if (player.influence.length === 0) {
             player.isAlive = false;

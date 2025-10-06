@@ -106,6 +106,25 @@ export function initSocket(io: Server) {
     gameManager.registerGame(coup);
     coup.onEvent = (roomId: string | string[], event: any, payload: any) => {
         io.to(roomId).emit(event, payload);
+        
+        // For certain events, also emit state updates
+        if (event === "coup:cardRevealed") {
+            const updatedState = gameManager.getGameState(roomId as string);
+            if (updatedState && updatedState.players) {
+                // Emit sanitized state to each player individually
+                updatedState.players.forEach((p: any) => {
+                    const targetSocket = p.socketId || p.playerId;
+                    if (targetSocket) {
+                        io.to(targetSocket).emit(
+                            "game:state",
+                            sanitizeStateForPlayer(updatedState, p.playerId)
+                        );
+                    }
+                });
+            }
+            // Emit general state update to room
+            io.to(roomId).emit("game:stateUpdate", sanitizeStateForAll(updatedState));
+        }
     };
 
     // Track connected sockets for cleanup
