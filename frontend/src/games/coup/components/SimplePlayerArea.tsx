@@ -10,80 +10,42 @@ interface SimplePlayerAreaProps {
 
 export const SimplePlayerArea: React.FC<SimplePlayerAreaProps> = ({
   player,
-  isCurrentPlayer,
   isActivePlayer,
 }) => {
   const aliveInfluences = player.influences?.filter((c) => !c.isLost) || [];
   const isAlive = player.isAlive;
 
-  console.log("Player Influences:", aliveInfluences);
   return (
     <div
       className={`
-        p-3 rounded-lg border transition-all duration-200
+        flex items-center justify-between px-3 py-2.5 rounded-xl border transition-all duration-200 shadow-sm
         ${
-          isCurrentPlayer
-            ? "border-blue-500 bg-blue-900/20 shadow-lg shadow-blue-500/20"
-            : "border-slate-600 bg-slate-800/60"
+          isActivePlayer
+            ? "border-yellow-400 bg-yellow-900/30 ring-1 ring-yellow-400/50"
+            : "border-slate-600/60 bg-slate-800/80"
         }
-        ${isActivePlayer ? "ring-2 ring-yellow-400 ring-opacity-50" : ""}
-        ${!isAlive ? "opacity-50 grayscale" : ""}
+        ${!isAlive ? "opacity-40 grayscale" : ""}
       `}>
       {/* Player Name and Status */}
-      <div className="flex items-center justify-between mb-2">
-        <h3
-          className={`font-semibold text-sm ${
-            isCurrentPlayer ? "text-blue-300" : "text-white"
-          }`}>
+      <div className="flex flex-col overflow-hidden mr-2">
+        <div className="truncate font-semibold text-sm text-gray-100 max-w-[80px] sm:max-w-[120px]">
           {player.name}
-          {isCurrentPlayer && <span className="ml-1 text-xs">(You)</span>}
-        </h3>
-
-        {isActivePlayer && (
-          <div className="flex items-center gap-1">
-            <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse" />
-            <span className="text-xs text-yellow-400 font-medium">Turn</span>
-          </div>
-        )}
-
+        </div>
         {!isAlive && (
-          <span className="text-xs text-red-400 font-medium">Eliminated</span>
+          <span className="text-[10px] uppercase text-red-400 font-bold tracking-wider leading-none mt-0.5">Eliminated</span>
         )}
       </div>
 
-      {/* Coins and Cards Count */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1">
-          <span className="text-yellow-400">🪙</span>
-          <span className="text-white font-semibold">{player.coins}</span>
-          <span className="text-xs text-gray-400">coins</span>
+      {/* Coins and Cards Count (Compact) */}
+      <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-1 bg-black/20 px-1.5 py-0.5 rounded">
+          <span className="text-yellow-400 text-xs">🪙</span>
+          <span className="text-white font-mono text-sm leading-none">{player.coins}</span>
         </div>
-
-        <div className="flex items-center gap-1">
-          <span className="text-red-400">❤️</span>
-          <span className="text-white font-semibold">
-            {aliveInfluences.length}
-          </span>
-          <span className="text-xs text-gray-400">cards</span>
+        <div className="flex items-center gap-1 bg-black/20 px-1.5 py-0.5 rounded">
+          <span className="text-red-400 text-xs">❤️</span>
+          <span className="text-white font-mono text-sm leading-none">{aliveInfluences.length}</span>
         </div>
-      </div>
-
-      {/* Card backs representation */}
-      <div className="mt-2 flex gap-1 justify-center">
-        {aliveInfluences.map((_, index) => (
-          <div
-            key={index}
-            className="w-6 h-8 bg-gradient-to-b from-blue-600 to-blue-800 rounded border border-blue-500/30 shadow-sm"
-          />
-        ))}
-        {Array.from({ length: Math.max(0, 2 - aliveInfluences.length) }).map(
-          (_, index) => (
-            <div
-              key={`lost-${index}`}
-              className="w-6 h-8 bg-gradient-to-b from-red-800 to-red-900 rounded border border-red-600/30 shadow-sm opacity-30"
-            />
-          ),
-        )}
       </div>
     </div>
   );

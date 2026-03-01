@@ -12,7 +12,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { io, type Socket } from "socket.io-client";
 
-const BACKEND_URL = "http://localhost:4000";
+const BACKEND_URL = process.env.VITE_SOCKET_URL || "http://localhost:4000";
 const NUM_PLAYERS = 4;
 const MAX_TURNS = 200;
 const ACTION_DELAY_MS = 300;

@@ -11,18 +11,22 @@ export default function LoseCardModal({
   const [selected, setSelected] = useState<string | null>(null);
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-      <div className="bg-white rounded-xl shadow-lg p-6 w-[400px]">
-        <h2 className="text-lg font-bold mb-4">Choose a card to lose</h2>
+    <div className="fixed inset-0 flex items-center justify-center bg-black/80 backdrop-blur-md z-50 p-4">
+      <div className="bg-slate-800 border border-red-500/50 rounded-2xl shadow-2xl p-6 w-full max-w-sm animate-scale-in">
+        <div className="text-center mb-6">
+          <div className="text-4xl mb-2">🩸</div>
+          <h2 className="text-xl text-white font-bold">Choose a card to lose</h2>
+          <p className="text-sm text-gray-400 mt-1">You must sacrifice one of your influences.</p>
+        </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3">
           {cards.map((c) => (
             <button
               key={c}
-              className={`px-4 py-2 rounded-lg border font-medium transition ${
+              className={`w-full px-4 py-4 rounded-xl border-2 font-bold text-lg transition-all ${
                 selected === c
-                  ? "bg-blue-600 text-white border-blue-600"
-                  : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100"
+                  ? "bg-red-600/20 text-red-400 border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.3)]"
+                  : "bg-slate-700/50 text-gray-300 border-slate-600 hover:bg-slate-700"
               }`}
               onClick={() => setSelected(c)}>
               {c}
@@ -30,16 +34,16 @@ export default function LoseCardModal({
           ))}
         </div>
 
-        <div className="mt-4 flex justify-end">
+        <div className="mt-6">
           <button
             disabled={!selected}
             onClick={() => selected && onSelect(selected)}
-            className={`px-4 py-2 rounded-lg font-semibold ${
+            className={`w-full py-4 rounded-xl font-bold text-lg transition-all shadow-lg ${
               selected
-                ? "bg-green-600 text-white hover:bg-green-700"
-                : "bg-gray-300 text-gray-500 cursor-not-allowed"
+                ? "bg-red-600 text-white hover:bg-red-500 hover:shadow-red-500/25"
+                : "bg-slate-700 text-slate-500 cursor-not-allowed border border-slate-600"
             }`}>
-            Confirm
+            Confirm Sacrifice
           </button>
         </div>
       </div>

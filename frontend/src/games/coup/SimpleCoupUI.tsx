@@ -1,6 +1,6 @@
 // src/games/coup/SimpleCoupUI.tsx
 import { useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { useCoupGame } from "./hooks/useCoupGame";
 import { SimpleGameBoard } from "./components/SimpleGameBoard";
 import { ResponsiveActionPanel } from "./components/ResponsiveActionPanel";
@@ -13,7 +13,6 @@ import {
 import LoseCardModal from "./components/LoseCardModal";
 import ExchangeCardModal from "./components/ExchangeCardModal";
 import BlockCardModal from "./components/BlockCardModal";
-import { InfluenceCard as InfluenceCardComponent } from "./components/InfluenceCard";
 import { RevealedInfluences } from "./components/RevealedInfluences";
 
 /**
@@ -30,7 +29,6 @@ import { RevealedInfluences } from "./components/RevealedInfluences";
  */
 export default function SimpleCoupUI(): JSX.Element {
   const { roomId } = useParams<{ roomId: string }>();
-  const navigate = useNavigate();
 
   // Custom hook for game state management
   const {
@@ -59,6 +57,7 @@ export default function SimpleCoupUI(): JSX.Element {
   } = useCoupGame(roomId);
 
   const [showExitModal, setShowExitModal] = useState(false);
+  const [showLogs, setShowLogs] = useState(false);
 
   // Transform players to include influence card objects
   const transformedPlayers: CoupPlayerExtended[] =
@@ -262,29 +261,45 @@ export default function SimpleCoupUI(): JSX.Element {
           />
         )}
 
-        {/* Game Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Game Board and Players */}
-          <div className="lg:col-span-3">
+        {/* Floating Log Button */}
+        <button
+          onClick={() => setShowLogs(!showLogs)}
+          className="fixed top-24 right-4 z-30 bg-slate-800/90 backdrop-blur border border-slate-600 p-3 rounded-full shadow-[0_4px_15px_rgba(0,0,0,0.5)] text-white hover:scale-105 transition-transform"
+        >
+          📜
+        </button>
+
+        {/* Action Log Drawer/Modal */}
+        {showLogs && (
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setShowLogs(false)}>
+            <div 
+              className="bg-slate-900 border-t sm:border border-slate-700 w-full sm:w-[400px] sm:rounded-2xl rounded-t-2xl shadow-2xl overflow-hidden flex flex-col h-[60vh] sm:h-[500px] animate-slide-up"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-center p-4 border-b border-slate-700 bg-slate-800/50">
+                <h3 className="text-white font-bold flex items-center gap-2">📜 Game Log</h3>
+                <button onClick={() => setShowLogs(false)} className="text-gray-400 hover:text-white p-1 text-xl leading-none">
+                  ✕
+                </button>
+              </div>
+              <ActionLogPanel
+                logs={state.actionLogs || []}
+                className="w-full flex-1 border-0 rounded-none bg-transparent"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Game Content Container */}
+        <div className="w-full flex flex-col pb-64">
+          {/* Game Board (Arena) */}
+          <div className="mb-6">
             <SimpleGameBoard
               players={transformedPlayers}
               currentTurnPlayerId={state.currentTurnPlayerId}
               currentPlayerId={currentPlayer.playerId}
             />
           </div>
-          {/* Action Log Panel */}
-          <div className="lg:col-span-1">
-            <div className="bg-slate-800/60 backdrop-blur-sm rounded-xl border border-slate-600 p-4">
-              <h3 className="text-white font-semibold mb-3 text-sm">
-                Game Log
-              </h3>
-              <ActionLogPanel
-                logs={state.actionLogs || []}
-                className="w-full"
-              />
-            </div>
-          </div>
-        </div>
 
         {/* All Revealed Influences */}
 
@@ -333,39 +348,35 @@ export default function SimpleCoupUI(): JSX.Element {
           </div>
         </div> */}
 
-        {/* Action Panel */}
-        <div className="mt-6">
-          {state.pendingCardLoss && state.pendingCardLoss.playerId !== currentPlayer.playerId && (
-            <div className="mb-4 p-3 bg-red-900/60 border border-red-500/50 rounded-lg text-center shadow-lg animate-pulse">
-              <span className="text-red-200 font-semibold text-sm">
-                ⏳ Waiting for <span className="text-white bg-slate-800 px-2 py-0.5 rounded mx-1">{transformedPlayers.find(p => p.playerId === state.pendingCardLoss?.playerId)?.name || "a player"}</span> to choose a card to lose...
-              </span>
-            </div>
-          )}
-          <ResponsiveActionPanel
-            myPlayerState={
-              transformedPlayers.find(
-                (p) => p.playerId === currentPlayer.playerId,
-              ) || null
-            }
-            isMyTurn={isMyTurn}
-            selectedTarget={selectedTarget}
-            aliveOpponents={aliveOpponents.map(
-              (p) =>
-                transformedPlayers.find((tp) => tp.playerId === p.playerId) ||
-                (p as CoupPlayerExtended),
-            )}
-            pendingAction={state.pendingAction || null}
-            pendingCardLoss={state.pendingCardLoss || null}
-            setSelectedTarget={setSelectedTarget}
-            onActionClick={onActionClick}
-            onBlock={onBlock}
-            onChallenge={onChallenge}
-            onResolve={onResolve}
-            players={transformedPlayers}
-            currentTurnPlayerId={state.currentTurnPlayerId}
-          />
+          {/* Action Panel is now a floating bottom sheet rendered below */}
         </div>
+      </div>
+      
+      {/* Sticky Bottom Sheet: User Hand & Actions */}
+      <div className="z-40">
+        <ResponsiveActionPanel
+          myPlayerState={
+            transformedPlayers.find(
+              (p) => p.playerId === currentPlayer.playerId,
+            ) || null
+          }
+          isMyTurn={isMyTurn}
+          selectedTarget={selectedTarget}
+          aliveOpponents={aliveOpponents.map(
+            (p) =>
+              transformedPlayers.find((tp) => tp.playerId === p.playerId) ||
+              (p as CoupPlayerExtended),
+          )}
+          pendingAction={state.pendingAction || null}
+          pendingCardLoss={state.pendingCardLoss || null}
+          setSelectedTarget={setSelectedTarget}
+          onActionClick={onActionClick}
+          onBlock={onBlock}
+          onChallenge={onChallenge}
+          onResolve={onResolve}
+          players={transformedPlayers}
+          currentTurnPlayerId={state.currentTurnPlayerId}
+        />
       </div>
     </div>
   );

@@ -109,50 +109,7 @@ export const ResponsiveActionPanel: React.FC<ResponsiveActionPanelProps> = ({
     },
   ];
 
-  const renderActionButton = (action: any) => {
-    const disabled =
-      !canAct || action.cost > coins || (action.needsTarget && !selectedTarget);
 
-    return (
-      <button
-        key={action.type}
-        onClick={() => onActionClick(action.type)}
-        disabled={disabled}
-        className={`
-          relative p-2 sm:p-3 rounded-lg text-white font-medium text-sm
-          transition-all duration-150
-          ${
-            disabled
-              ? "opacity-40 cursor-not-allowed"
-              : "hover:opacity-90 active:scale-95"
-          }
-          ${action.color}
-          shadow-md
-        `}
-        title={
-          action.description +
-          (action.cost > 0 ? ` (Cost: ${action.cost} coins)` : "")
-        }>
-        <div className="flex items-center gap-1 sm:gap-2">
-          <span className="text-base sm:text-lg">{action.icon}</span>
-          <div className="text-left">
-            <div className="font-semibold text-xs sm:text-sm">
-              {action.name}
-            </div>
-            {action.cost > 0 && (
-              <div className="text-xs opacity-80">{action.cost}💰</div>
-            )}
-          </div>
-        </div>
-
-        {disabled && action.needsTarget && !selectedTarget && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-lg">
-            <span className="text-xs text-red-300">Select Target</span>
-          </div>
-        )}
-      </button>
-    );
-  };
 
   const showPendingAction = (pendingAction: PendingAction) => {
     const actionPerformedBy =
@@ -167,8 +124,8 @@ export const ResponsiveActionPanel: React.FC<ResponsiveActionPanelProps> = ({
   };
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 lg:relative lg:bottom-auto lg:left-auto lg:right-auto bg-slate-900/95 lg:bg-slate-800 backdrop-blur-sm lg:backdrop-blur-none border-t lg:border lg:border-slate-600 rounded-t-2xl lg:rounded-2xl shadow-2xl z-10">
-      <div className="p-3 sm:p-4 space-y-3">
+    <div className="fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur-md border-t border-slate-700/80 rounded-t-[20px] shadow-[0_-8px_30px_-15px_rgba(0,0,0,0.6)] z-40 pb-safe pb-4 transition-transform duration-300">
+      <div className="px-3 pt-3 pb-2 space-y-3">
         {/* Pending Action Response */}
         {pendingAction && showPendingAction(pendingAction) && (
           <div className="p-3 bg-gradient-to-r from-yellow-900/60 to-red-900/60 border border-yellow-500/40 rounded-lg">
@@ -289,102 +246,114 @@ export const ResponsiveActionPanel: React.FC<ResponsiveActionPanelProps> = ({
           </div>
         )}
 
-        {/* Player Status */}
-        <div className="bg-slate-800/60 backdrop-blur-sm p-3 rounded-lg border border-slate-600/50">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="font-semibold text-white text-sm">Your Status</h3>
-            <div
-              className={`px-2 py-1 rounded text-xs font-semibold ${
-                isAlive ? "bg-green-600 text-white" : "bg-red-600 text-white"
-              }`}>
-              {isAlive ? "ALIVE" : "ELIMINATED"}
+        {/* Compact Player Status & Influences */}
+        <div className="flex items-center justify-between bg-slate-800/80 rounded-xl p-2.5 border border-slate-600/50 shadow-inner">
+          <div className="flex items-center gap-3">
+            <div className="flex flex-col items-center bg-black/30 rounded-lg px-3 py-1.5">
+              <span className="text-yellow-400 text-sm leading-none mb-1">🪙</span>
+              <span className="text-xl font-bold text-white leading-none">{coins}</span>
             </div>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1">
-              <span className="text-yellow-400">🪙</span>
-              <span className="text-lg font-bold text-white">{coins}</span>
-              <span className="text-xs text-gray-400">coins</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="text-red-400">❤️</span>
-              <span className="text-lg font-bold text-white">
-                {myInfluences?.filter((c) => !c.isLost).length || 0}
-              </span>
-              <span className="text-xs text-gray-400">influences</span>
-            </div>
-          </div>
-        </div>
-
-        {/* display influences */}
-        <div className="bg-slate-700/40 p-3 rounded-lg">
-          <h4 className="text-sm font-medium text-gray-300 mb-2">
-            Your Influences
-          </h4>
-          <div className="flex gap-1">
-            {myInfluences.map((influence) => (
-              <InfluenceCard
-                card={influence}
-                isHidden={influence.isLost}
-                isMyCard={true}
-                size="large"
-                rotation={360}
-              />
-            ))}
-          </div>
-        </div>
-
-        {/* Target Selection */}
-        {canAct && aliveOpponents.length > 0 && (
-          <div className="bg-slate-700/40 p-3 rounded-lg">
-            <label className="block text-xs font-medium text-gray-300 mb-1">
-              Target Player
-            </label>
-            <select
-              value={selectedTarget || ""}
-              onChange={(e) => setSelectedTarget(e.target.value || null)}
-              className="w-full p-2 bg-slate-600 border border-slate-500 rounded text-white text-sm">
-              <option value="">Select target...</option>
-              {aliveOpponents.map((opponent) => (
-                <option key={opponent.playerId} value={opponent.playerId}>
-                  {opponent.name} ({opponent.coins}💰,{" "}
-                  {opponent.influences?.filter((c) => !c.isLost).length || 0}❤️)
-                </option>
+            <div className="flex gap-1.5">
+              {myInfluences.map((influence) => (
+                <div key={influence.id} className="relative scale-90 origin-left">
+                  <InfluenceCard
+                    card={influence}
+                    isHidden={influence.isLost}
+                    isMyCard={true}
+                    size="small"
+                    rotation={360}
+                  />
+                </div>
               ))}
-            </select>
+            </div>
           </div>
-        )}
+          
+          <div className="text-right flex flex-col items-end justify-center">
+             <div className="text-xs text-gray-400 font-medium mb-1">Status</div>
+             <div
+              className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase ${
+                isAlive ? "bg-green-600/80 text-green-100" : "bg-red-600/80 text-red-100"
+              }`}>
+              {isAlive ? "Alive" : "Dead"}
+            </div>
+          </div>
+        </div>
 
-        {/* Action Grid */}
+        {/* Action Area */}
         {canAct && (
-          <div>
-            <h4 className="text-sm font-medium text-gray-300 mb-2">
-              Available Actions
-            </h4>
-            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 gap-1 sm:gap-2">
-              {allActions.map(renderActionButton)}
+          <div className="space-y-3 mt-1">
+            {/* Target Selection */}
+            {aliveOpponents.length > 0 && (
+              <div className="flex items-center gap-2 bg-slate-700/40 p-2 rounded-lg border border-slate-600/30">
+                <span className="text-lg">🎯</span>
+                <select
+                  value={selectedTarget || ""}
+                  onChange={(e) => setSelectedTarget(e.target.value || null)}
+                  className="flex-1 bg-slate-800 border border-slate-500 rounded-md py-1.5 px-2 text-white text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                  <option value="">Select a target...</option>
+                  {aliveOpponents.map((opponent) => (
+                    <option key={opponent.playerId} value={opponent.playerId}>
+                      {opponent.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Action Buttons (Scrollable Row) */}
+            <div className="overflow-x-auto pb-2 -mx-2 px-2 snap-x hide-scrollbar">
+              <div className="flex gap-2 w-max">
+                {allActions.map(action => {
+                   const disabled = !canAct || action.cost > coins || (action.needsTarget && !selectedTarget);
+                   return (
+                    <button
+                      key={action.type}
+                      onClick={() => onActionClick(action.type)}
+                      disabled={disabled}
+                      className={`
+                        snap-start relative flex-shrink-0 w-[110px] p-2.5 rounded-xl text-white font-medium text-sm
+                        transition-all duration-200 flex flex-col items-center justify-center gap-1
+                        ${disabled ? "opacity-40 cursor-not-allowed saturate-50" : "hover:opacity-90 active:scale-95 shadow-lg"}
+                        ${action.color}
+                      `}
+                    >
+                      <span className="text-2xl drop-shadow-md mb-0.5">{action.icon}</span>
+                      <span className="text-[11px] font-bold text-center leading-tight drop-shadow-sm">{action.name}</span>
+                      {action.cost > 0 && (
+                        <div className="absolute top-1 right-1.5 text-[10px] font-bold bg-black/30 px-1 rounded">
+                          {action.cost}🪙
+                        </div>
+                      )}
+                      {disabled && action.needsTarget && !selectedTarget && (
+                        <div className="absolute inset-0 bg-black/60 rounded-xl flex items-center justify-center backdrop-blur-[1px]">
+                          <span className="text-[10px] text-red-300 font-bold bg-black/50 px-1.5 py-0.5 rounded">Target?</span>
+                        </div>
+                      )}
+                    </button>
+                   );
+                })}
+              </div>
             </div>
 
             {/* Must Coup Warning */}
             {coins >= 10 && (
-              <div className="mt-2 p-2 bg-red-900/50 border border-red-500/50 rounded text-center">
-                <div className="text-red-300 font-semibold text-xs">
-                  ⚠️ You must Coup! (10+ coins)
+              <div className="p-2 bg-red-900/80 border border-red-500 rounded-lg text-center shadow-lg animate-pulse">
+                <div className="text-red-100 font-bold text-sm tracking-wide">
+                  ⚠️ YOU MUST COUP! (10+ Coins)
                 </div>
               </div>
             )}
           </div>
         )}
 
-        {/* Turn Indicator */}
-        {!isMyTurn && (
-          <div className="text-center p-2 bg-slate-700/40 rounded-lg">
-            <div className="text-sm text-gray-300">
-              Waiting for{" "}
-              {players.find((p) => p.playerId === currentTurnPlayerId)?.name ||
-                "opponent"}
-              's turn
+        {/* Turn Indicator (When not active) */}
+        {!isMyTurn && isAlive && (
+          <div className="flex items-center justify-center gap-2 p-2.5 bg-slate-800/50 rounded-lg border border-slate-700">
+            <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" />
+            <div className="text-sm text-gray-300 font-medium tracking-wide">
+              Waiting for <span className="text-white font-bold">{players.find((p) => p.playerId === currentTurnPlayerId)?.name || "opponent"}</span>
             </div>
+            <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: "0.2s"}} />
           </div>
         )}
       </div>
