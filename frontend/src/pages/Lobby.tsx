@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   connectSocket,
@@ -34,6 +34,29 @@ export default function Lobby() {
   const [toastType, setToastType] = useState<"error" | "success" | "info">(
     "error",
   );
+
+  const lastAutoRoomName = useRef("");
+
+  // Auto-generate room name based on player name
+  useEffect(() => {
+    const trimmedPlayer = playerName.trim();
+    if (!trimmedPlayer) {
+      // If player clears their name and the room name was an auto-gen, clear it too
+      if (roomName === lastAutoRoomName.current) {
+        setRoomName("");
+        lastAutoRoomName.current = "";
+      }
+      return;
+    }
+
+    const suggestedName = `${trimmedPlayer}'s Room`;
+    
+    // Only update if roomName is empty or matches the last auto-generated name
+    if (!roomName.trim() || roomName === lastAutoRoomName.current) {
+      setRoomName(suggestedName);
+      lastAutoRoomName.current = suggestedName;
+    }
+  }, [playerName]);
 
   const showToast = (
     msg: string,

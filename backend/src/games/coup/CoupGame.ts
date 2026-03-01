@@ -555,7 +555,7 @@ export class CoupGame implements IGame {
 
         if (claimedPlayer.influence.includes(requiredCard)) {
             // Challenge failed - challenger loses influence
-            this.addActionLog(roomId, state, challenger.name, "Challenge", claimedPlayer.name, `challenged ${claimedPlayer.name} but failed. ${challenger.name} lost a card.`);
+            this.addActionLog(roomId, state, challenger.name, "Challenge", claimedPlayer.name, `but failed. ${challenger.name} lost a card.`);
             this.loseInfluence(roomId, state, challenger.playerId);
 
             // Replace revealed card for the claimed player — remove only ONE instance
@@ -585,7 +585,7 @@ export class CoupGame implements IGame {
             }
         } else {
             // Challenge succeeded - claimed player loses influence
-            this.addActionLog(roomId, state, challenger.name, "Challenge", claimedPlayer.name, `challenged ${claimedPlayer.name} successfully. ${claimedPlayer.name} lost a card.`);
+            this.addActionLog(roomId, state, challenger.name, "Challenge", claimedPlayer.name, `successfully. ${claimedPlayer.name} lost a card.`);
 
             // Special case: If this was a Contessa block challenge for Assassinate, player loses both cards
             const isContessaBlockChallenge = isBlockChallenge &&
@@ -702,7 +702,9 @@ export class CoupGame implements IGame {
         if (!action) return;
         if (action.blockedBy) {
             console.log("Action is blocked by:", action.blockedBy);
-            this.addActionLog(roomId, state, action.blockedBy, "Block", action.fromPlayerId, `blocked ${action.fromPlayerId} with ${action.blockingCard}.`);
+            const blockedByName = this.getPlayerName(state, action.blockedBy);
+            const fromName = this.getPlayerName(state, action.fromPlayerId);
+            this.addActionLog(roomId, state, blockedByName, "Block", fromName, `blocked ${fromName} with ${action.blockingCard}.`);
             state.pendingAction = undefined;
             if (!state.pendingCardLoss) {
                 this.advanceTurn(state);

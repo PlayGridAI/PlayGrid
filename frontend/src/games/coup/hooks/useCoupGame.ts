@@ -61,6 +61,18 @@ export const useCoupGame = (roomId: string | undefined): UseCoupGameReturn => {
     const [exchangeData, setExchangeData] = useState<{ availableCards: string[], cardsToKeep: number } | null>(null);
     const [showBlockCardModal, setShowBlockCardModal] = useState(false);
     const [blockCardData, setBlockCardData] = useState<{ availableCards: string[], actionToBlock: string } | null>(null);
+    const playersRef = useRef<any[]>([]);
+
+    useEffect(() => {
+        if (state?.players) {
+            playersRef.current = state.players;
+        }
+    }, [state?.players]);
+
+    const getPlayerName = (playerId: string) => {
+        const player = playersRef.current.find(p => p.playerId === playerId);
+        return player?.name || "Unknown Player";
+    };
 
     /* -------------------- Socket Event Handlers -------------------- */
     const setupEvents = useCallback((socket: Socket) => {
@@ -111,7 +123,8 @@ export const useCoupGame = (roomId: string | undefined): UseCoupGameReturn => {
         };
 
         const handlePlayerDisconnected = (data: any) => {
-            setError(`Player disconnected: ${data?.playerId || 'Unknown player'}`);
+            const name = getPlayerName(data?.playerId);
+            setError(`Player disconnected: ${name}`);
             setTimeout(() => setError(''), 3000);
         };
 
@@ -146,13 +159,15 @@ export const useCoupGame = (roomId: string | undefined): UseCoupGameReturn => {
 
         const handleBlockAction = (data: any) => {
             // Show notification about the block to all players
-            setError(`${data.blockedBy} blocked ${data.action} with ${data.blockingCard}${data.automatic ? ' (automatic)' : ''}`);
+            const name = getPlayerName(data.blockedBy);
+            setError(`${name} blocked ${data.action} with ${data.blockingCard}${data.automatic ? ' (automatic)' : ''}`);
             setTimeout(() => setError(''), 3000);
         };
 
         const handlePendingAction = (data: any) => {
             if (data.type === "BLOCK_PENDING_CHALLENGE") {
-                setError(`${data.blockedBy} blocked ${data.action} with ${data.blockingCard}`);
+                const name = getPlayerName(data.blockedBy);
+                setError(`${name} blocked ${data.action} with ${data.blockingCard}`);
 
                 // Update the state to show the blocked action as challengeable
                 setState((prevState) => {
