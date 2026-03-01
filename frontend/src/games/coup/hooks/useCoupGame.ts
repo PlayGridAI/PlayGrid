@@ -38,6 +38,7 @@ interface UseCoupGameReturn {
     exchangeCardChoice: (cards: string[]) => void;
     blockCardChoice: (card: string) => void;
     handleGameClose: () => void;
+    returnToLobby: () => void;
 }
 export const useCoupGame = (roomId: string | undefined): UseCoupGameReturn => {
     const navigate = useNavigate();
@@ -174,6 +175,21 @@ export const useCoupGame = (roomId: string | undefined): UseCoupGameReturn => {
             });
         };
 
+
+
+        const handleGameCleaned = () => {
+            console.log("Game cleaned up");
+            navigate(`/room/${roomId}`);
+        };
+
+        // On socket reconnect, re-request game state
+        const handleReconnect = () => {
+            console.log("useCoupGame: Socket reconnected, re-fetching game state");
+            if (roomId) {
+                socket.emit('game:join', { roomId, gameId: 'coup', playerId: currentPlayer.playerId });
+            }
+        };
+
         socket.on('game:state', handleGameState);
         socket.on('errorMessage', handleError);
         socket.on('player:disconnected', handlePlayerDisconnected);
@@ -184,10 +200,8 @@ export const useCoupGame = (roomId: string | undefined): UseCoupGameReturn => {
         socket.on("coup:blockAction", handleBlockAction);
         socket.on("game:pendingAction", handlePendingAction);
         socket.on("coup:actionLog", handleActionLog);
-        socket.on("game:cleaned", () => {
-            console.log("Game cleaned up");
-            navigate(`/room/${roomId}`);
-        });
+        socket.on("game:cleaned", handleGameCleaned);
+        socket.io.on("reconnect", handleReconnect);
 
         return () => {
             socket.off('game:state', handleGameState);
@@ -200,6 +214,8 @@ export const useCoupGame = (roomId: string | undefined): UseCoupGameReturn => {
             socket.off("coup:blockAction", handleBlockAction);
             socket.off("game:pendingAction", handlePendingAction);
             socket.off("coup:actionLog", handleActionLog);
+            socket.off("game:cleaned", handleGameCleaned);
+            socket.io.off("reconnect", handleReconnect);
         };
     }, []);
 
@@ -208,8 +224,7 @@ export const useCoupGame = (roomId: string | undefined): UseCoupGameReturn => {
     /* -------------------- Effects -------------------- */
     useEffect(() => {
         if (socket && roomId && currentPlayer.playerId) {
-            socket.emit('game:join', { roomId, gameId: 'coup' });
-
+            socket.emit('game:join', { roomId, gameId: 'coup', playerId: currentPlayer.playerId });
         }
     }, [socket, roomId, currentPlayer.playerId]);
 
@@ -222,6 +237,19 @@ export const useCoupGame = (roomId: string | undefined): UseCoupGameReturn => {
     };
 
     const handleGameClose = () => {
+        if (socket && roomId && currentPlayer) {
+            // Submit a surrender action so the backend kills the player gracefully
+            socket.emit("game:action", {
+                roomId,
+                action: { type: "SURRENDER", playerId: currentPlayer.playerId }
+            });
+            // Attempt to leave the room socket
+            socket.emit("leaveRoom", { roomId, playerId: currentPlayer.playerId });
+        }
+        navigate('/');
+    };
+
+    const returnToLobby = () => {
         if (socket && roomId) {
             socket.emit("game:cleanup", roomId);
         }
@@ -388,6 +416,7 @@ export const useCoupGame = (roomId: string | undefined): UseCoupGameReturn => {
         loseCardChoice,
         exchangeCardChoice,
         blockCardChoice,
-        handleGameClose
+        handleGameClose,
+        returnToLobby
     };
 };

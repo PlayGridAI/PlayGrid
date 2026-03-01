@@ -107,9 +107,40 @@ export function initSocket(io: Server) {
     coup.onEvent = (roomId: string | string[], event: any, payload: any) => {
         io.to(roomId).emit(event, payload);
     };
+    // Per-player event emitter (for private state like exchange cards)
+    coup.onPlayerEvent = (playerId: string, event: string, payload: any) => {
+        // Look up the player's current socketId from the room data
+        const allRooms = getAllRooms();
+        for (const room of allRooms) {
+            const player = room.players.find(p => p.playerId === playerId);
+            if (player && player.socketId) {
+                io.to(player.socketId).emit(event, payload);
+                return;
+            }
+        }
+    };
 
     // Track connected sockets for cleanup
     const connectedSockets = new Set<string>();
+
+    // Helper: emit per-player sanitized game state using current socketIds from room
+    function emitGameStateToAll(roomId: string) {
+        const room = getRoom(roomId);
+        const updatedState = gameManager.getGameState(roomId);
+        if (!room || !updatedState || !updatedState.players) return;
+
+        // Emit sanitized state to each player using their current socketId
+        for (const roomPlayer of room.players) {
+            if (roomPlayer.socketId) {
+                io.to(roomPlayer.socketId).emit(
+                    "game:state",
+                    sanitizeStateForPlayer(updatedState, roomPlayer.playerId)
+                );
+            }
+        }
+        // Also emit public state to room
+        io.to(roomId).emit("game:stateUpdate", sanitizeStateForAll(updatedState));
+    }
 
     io.on("connection", (socket: Socket) => {
         console.log("Socket connected:", socket.id);
@@ -320,6 +351,25 @@ export function initSocket(io: Server) {
                         socket.emit("game:state", sanitizeStateForPlayer(gameState, player.playerId));
                         socket.emit("game:rejoined", { gameId: room.game.id, roomId });
 
+                        // Re-emit pending modal events for this player (Coup-specific)
+                        const coupState = gameState as any;
+                        if (coupState.pendingCardLoss && coupState.pendingCardLoss.playerId === player.playerId) {
+                            const gamePlayer = coupState.players?.find((p: any) => p.playerId === player.playerId);
+                            if (gamePlayer?.influence) {
+                                socket.emit("coup:chooseCardToLose", {
+                                    playerId: player.playerId,
+                                    cards: gamePlayer.influence
+                                });
+                            }
+                        }
+                        if (coupState.exchangeCards && coupState.exchangeCards.playerId === player.playerId) {
+                            socket.emit("coup:chooseExchangeCards", {
+                                playerId: player.playerId,
+                                availableCards: coupState.exchangeCards.cards,
+                                cardsToKeep: coupState.exchangeCards.toKeep
+                            });
+                        }
+
                         // Notify other players about the reconnection
                         io.to(roomId).emit("player:reconnected", {
                             roomId,
@@ -398,7 +448,7 @@ export function initSocket(io: Server) {
             }
         });
 
-        socket.on("game:join", ({ roomId, gameId }) => {
+        socket.on("game:join", ({ roomId, gameId, playerId }) => {
             try {
                 const room = getRoom(roomId);
                 if (!room || !room.game || room.game.id !== gameId) {
@@ -408,11 +458,33 @@ export function initSocket(io: Server) {
 
                 const gameState = gameManager.getGameState(roomId);
                 if (gameState) {
-                    // Find the player by socket ID
-                    const player = room.players.find(p => p.socketId === socket.id);
+                    // Find the player by socket ID first, then by playerId as fallback
+                    let player = room.players.find(p => p.socketId === socket.id);
+                    if (!player && playerId) {
+                        player = room.players.find(p => p.playerId === playerId);
+                    }
                     if (player) {
                         // Send current game state to the joining player
                         socket.emit("game:state", sanitizeStateForPlayer(gameState, player.playerId));
+
+                        // Re-emit pending modal events for this player (Coup-specific)
+                        const coupState = gameState as any;
+                        if (coupState.pendingCardLoss && coupState.pendingCardLoss.playerId === player.playerId) {
+                            const gamePlayer = coupState.players?.find((p: any) => p.playerId === player!.playerId);
+                            if (gamePlayer?.influence) {
+                                socket.emit("coup:chooseCardToLose", {
+                                    playerId: player.playerId,
+                                    cards: gamePlayer.influence
+                                });
+                            }
+                        }
+                        if (coupState.exchangeCards && coupState.exchangeCards.playerId === player.playerId) {
+                            socket.emit("coup:chooseExchangeCards", {
+                                playerId: player.playerId,
+                                availableCards: coupState.exchangeCards.cards,
+                                cardsToKeep: coupState.exchangeCards.toKeep
+                            });
+                        }
                     } else {
                         // If player not found, send unsanitized state
                         socket.emit("game:state", gameState);
@@ -435,23 +507,7 @@ export function initSocket(io: Server) {
                 }
 
                 gameManager.handleAction(roomId, action);
-                const updatedState = gameManager.getGameState(roomId);
-
-                if (updatedState && updatedState.players) {
-                    // Emit sanitized state to each player individually
-                    updatedState.players.forEach((p: any) => {
-                        const targetSocket = p.socketId || p.playerId;
-                        if (targetSocket) {
-                            io.to(targetSocket).emit(
-                                "game:state",
-                                sanitizeStateForPlayer(updatedState, p.playerId)
-                            );
-                        }
-                    });
-                }
-
-                // Emit general state update to room
-                io.to(roomId).emit("game:stateUpdate", sanitizeStateForAll(updatedState));
+                emitGameStateToAll(roomId);
             } catch (err) {
                 console.error("game:action error:", err);
                 socket.emit("game:error", { error: "Failed to handle game action" });
@@ -461,6 +517,11 @@ export function initSocket(io: Server) {
         socket.on("game:cleanup", (roomId: string) => {
             try {
                 gameManager.cleanupGame(roomId);
+                const room = getRoom(roomId);
+                if (room) {
+                    room.game = undefined;
+                    emitRoomUpdate(io);
+                }
             } catch (err) {
                 console.error("game:cleanup error:", err);
                 socket.emit("game:error", { error: "Failed to cleanup game" });
@@ -472,21 +533,7 @@ export function initSocket(io: Server) {
             try {
                 const { roomId, action } = payload;
                 gameManager.handleAction(roomId, action);
-                const updatedState = gameManager.getGameState(roomId);
-
-                if (updatedState && updatedState.players) {
-                    // Emit sanitized state to each player individually
-                    updatedState.players.forEach((p: any) => {
-                        const targetSocket = p.socketId || p.playerId;
-                        if (targetSocket) {
-                            io.to(targetSocket).emit(
-                                "game:state",
-                                sanitizeStateForPlayer(updatedState, p.playerId)
-                            );
-                        }
-                    });
-                }
-                io.to(roomId).emit("game:stateUpdate", sanitizeStateForAll(updatedState));
+                emitGameStateToAll(roomId);
                 safeAck(ack, { success: true });
             } catch (err) {
                 console.error("coup:loseCardChoice error:", err);
@@ -499,21 +546,7 @@ export function initSocket(io: Server) {
             try {
                 const { roomId, action } = payload;
                 gameManager.handleAction(roomId, action);
-                const updatedState = gameManager.getGameState(roomId);
-
-                if (updatedState && updatedState.players) {
-                    // Emit sanitized state to each player individually
-                    updatedState.players.forEach((p: any) => {
-                        const targetSocket = p.socketId || p.playerId;
-                        if (targetSocket) {
-                            io.to(targetSocket).emit(
-                                "game:state",
-                                sanitizeStateForPlayer(updatedState, p.playerId)
-                            );
-                        }
-                    });
-                }
-                io.to(roomId).emit("game:stateUpdate", sanitizeStateForAll(updatedState));
+                emitGameStateToAll(roomId);
                 safeAck(ack, { success: true });
             } catch (err) {
                 console.error("coup:exchangeCardsChoice error:", err);
@@ -526,21 +559,7 @@ export function initSocket(io: Server) {
             try {
                 const { roomId, action } = payload;
                 gameManager.handleAction(roomId, action);
-                const updatedState = gameManager.getGameState(roomId);
-
-                if (updatedState && updatedState.players) {
-                    // Emit sanitized state to each player individually
-                    updatedState.players.forEach((p: any) => {
-                        const targetSocket = p.socketId || p.playerId;
-                        if (targetSocket) {
-                            io.to(targetSocket).emit(
-                                "game:state",
-                                sanitizeStateForPlayer(updatedState, p.playerId)
-                            );
-                        }
-                    });
-                }
-                io.to(roomId).emit("game:stateUpdate", sanitizeStateForAll(updatedState));
+                emitGameStateToAll(roomId);
                 safeAck(ack, { success: true });
             } catch (err) {
                 console.error("coup:blockCardChoice error:", err);

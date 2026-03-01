@@ -49,6 +49,7 @@ export interface CoupGameState extends GameState {
     };
     pendingCardLoss?: {
         playerId: string;
+        amount?: number;
     };
     winner?: string;
 }
@@ -56,6 +57,8 @@ export interface CoupGameState extends GameState {
 export class CoupGame implements IGame {
     gameId = "coup";
     onEvent: ((roomId: string | string[], event: any, payload: any) => void) | undefined;
+    // Per-player event emitter (for private state like exchange cards)
+    onPlayerEvent: ((socketId: string, event: string, payload: any) => void) | undefined;
 
     // Game constants
     private static readonly STARTING_COINS = 2;
@@ -163,12 +166,12 @@ export class CoupGame implements IGame {
         const player = state.players.find(p => p.playerId === action.playerId);
         if (!player || !player.isAlive) return false;
         // If a challenge/block is pending, only those related actions are allowed
-        if (state.pendingAction && !["BLOCK", "CHALLENGE", "RESOLVE_ACTION", "EXCHANGE_CARDS", "EXCHANGE", "CHOOSE_BLOCK_CARD", "LOSE_CARD"].includes(action.type)) {
+        if (state.pendingAction && !["BLOCK", "CHALLENGE", "RESOLVE_ACTION", "EXCHANGE_CARDS", "EXCHANGE", "CHOOSE_BLOCK_CARD", "LOSE_CARD", "SURRENDER"].includes(action.type)) {
             return false;
         }
 
         // Must coup if at forced coup threshold
-        if (player.coins >= CoupGame.FORCED_COUP_THRESHOLD && action.type !== "COUP") {
+        if (player.coins >= CoupGame.FORCED_COUP_THRESHOLD && action.type !== "COUP" && action.type !== "SURRENDER") {
             return false;
         }
 
@@ -180,6 +183,7 @@ export class CoupGame implements IGame {
             case "LOSE_CARD":
             case "EXCHANGE_CARDS":
             case "CHOOSE_BLOCK_CARD":
+            case "SURRENDER":
                 return true;
 
             case "COUP":
@@ -193,17 +197,16 @@ export class CoupGame implements IGame {
 
             case "BLOCK":
                 // Can only block if there's a pending action that can be blocked
-                // and the player is eligible (target for Assassinate, anyone for STEAL/FOREIGN_AID)
                 if (!state.pendingAction) return false;
                 const canBlock = this.canActionBeBlocked(state.pendingAction.type);
                 if (!canBlock) return false;
 
-                // For ASSASSINATE, only the target can block
-                if (state.pendingAction.type === "ASSASSINATE") {
+                // For ASSASSINATE and STEAL, only the target can block
+                if (state.pendingAction.type === "ASSASSINATE" || state.pendingAction.type === "STEAL") {
                     return state.pendingAction.toPlayerId === action.playerId;
                 }
 
-                // For other blockable actions, any other player can block
+                // For other blockable actions (FOREIGN_AID), any other player can block
                 return state.pendingAction.fromPlayerId !== action.playerId;
 
             case "CHALLENGE":
@@ -274,6 +277,7 @@ export class CoupGame implements IGame {
                 break;
 
             case "COUP":
+                if (player.coins < CoupGame.COUP_COST) return state;
                 player.coins -= CoupGame.COUP_COST;
                 const coupTarget = this.getPlayerName(state, action.payload.targetId);
                 this.addActionLog(roomId, state, player.name, "Coup", coupTarget, `paid 7 coins to coup ${coupTarget}.`);
@@ -285,6 +289,7 @@ export class CoupGame implements IGame {
                 break;
 
             case "ASSASSINATE":
+                if (player.coins < CoupGame.ASSASSINATE_COST) return state;
                 player.coins -= CoupGame.ASSASSINATE_COST;
                 const assassinateTarget = this.getPlayerName(state, action.payload.targetId);
                 state.pendingAction = {
@@ -293,9 +298,8 @@ export class CoupGame implements IGame {
                     toPlayerId: action.payload.targetId,
                     respondedPlayers: []
                 };
-                state.pendingCardLoss = {
-                    playerId: action.payload.targetId
-                };
+                // NOTE: pendingCardLoss is NOT set here. Target only loses a card
+                // when the action resolves (after challenge/block window closes).
                 this.addActionLog(roomId, state, player.name, "Assassinate", assassinateTarget, `claimed Assassin and paid 3 coins to assassinate ${assassinateTarget}.`);
                 break;
 
@@ -317,6 +321,43 @@ export class CoupGame implements IGame {
                     respondedPlayers: []
                 };
                 this.addActionLog(roomId, state, player.name, "Exchange", undefined, "claimed Ambassador and attempted to exchange cards.");
+                break;
+
+            case "SURRENDER":
+                this.addActionLog(roomId, state, player.name, "Surrender", undefined, "forfeited the game.");
+                player.revealedCards.push(...player.influence);
+                player.influence = [];
+                player.isAlive = false;
+
+                if (state.pendingCardLoss?.playerId === player.playerId) {
+                    state.pendingCardLoss = undefined;
+                }
+                if (state.exchangeCards?.playerId === player.playerId) {
+                    // Return cards to deck
+                    state.deck.push(...state.exchangeCards.cards);
+                    state.deck = this.shuffle(state.deck);
+                    state.exchangeCards = undefined;
+                }
+
+                this.checkWinner(state);
+
+                // Cancel any pending action involving them
+                if (state.pendingAction?.fromPlayerId === player.playerId ||
+                    state.pendingAction?.toPlayerId === player.playerId ||
+                    state.pendingAction?.blockedBy === player.playerId) {
+                    state.pendingAction = undefined;
+                    if (!state.pendingCardLoss && !state.winner) {
+                        this.advanceTurn(state);
+                    }
+                } else if (state.currentTurnPlayerId === player.playerId && !state.winner) {
+                    // They quit on their current turn
+                    this.advanceTurn(state);
+                } else if (state.pendingAction && !state.winner) {
+                    // They quit during someone else's turn, see if everyone has now responded
+                    if (this.allPlayersHaveResponded(state)) {
+                        this.resolvePendingAction(roomId, state);
+                    }
+                }
                 break;
 
             case "BLOCK":
@@ -443,6 +484,12 @@ export class CoupGame implements IGame {
                 break;
 
             case "RESOLVE_ACTION":
+                // If we're waiting for a card loss, the action is already resolving or fully resolved.
+                // Ignore any late "Pass" responses to prevent double-resolving.
+                if (state.pendingCardLoss) {
+                    break;
+                }
+
                 // Track that this player has resolved (not challenging/blocking)
                 if (state.pendingAction) {
                     const respondedPlayers = state.pendingAction.respondedPlayers || [];
@@ -467,10 +514,11 @@ export class CoupGame implements IGame {
                 break;
         }
 
-        // Only advance turn for primary actions, not for response actions or card loss
-        // Also don't advance if there's a pending card loss waiting for player choice
-        if (!["CHALLENGE", "BLOCK", "RESOLVE_ACTION", "LOSE_CARD", "EXCHANGE_CARDS", "CHOOSE_BLOCK_CARD"].includes(action.type) &&
-            !state.pendingCardLoss) {
+        // Only INCOME resolves immediately and advances turn here.
+        // All other primary actions create a pendingAction and advance turn
+        // when the action fully resolves (via resolvePendingAction/loseCard/handleExchangeCards).
+        // COUP advances turn in its own handler above (or after loseCard).
+        if (action.type === "INCOME") {
             this.advanceTurn(state);
         }
 
@@ -493,7 +541,12 @@ export class CoupGame implements IGame {
             isBlockChallenge = true;
         } else if (state.pendingAction.fromPlayerId === claimedPlayerId) {
             // Challenging the original action
-            requiredCard = this.getRequiredCardForAction(state.pendingAction.type);
+            const card = this.getRequiredCardForAction(state.pendingAction.type);
+            if (!card) {
+                console.warn(`Cannot challenge action ${state.pendingAction.type} — no role claim`);
+                return;
+            }
+            requiredCard = card;
             isBlockChallenge = false;
         } else {
             console.warn("Invalid challenge target");
@@ -505,8 +558,11 @@ export class CoupGame implements IGame {
             this.addActionLog(roomId, state, challenger.name, "Challenge", claimedPlayer.name, `challenged ${claimedPlayer.name} but failed. ${challenger.name} lost a card.`);
             this.loseInfluence(roomId, state, challenger.playerId);
 
-            // Replace revealed card for the claimed player
-            claimedPlayer.influence = claimedPlayer.influence.filter(c => c !== requiredCard);
+            // Replace revealed card for the claimed player — remove only ONE instance
+            const cardIdx = claimedPlayer.influence.indexOf(requiredCard);
+            if (cardIdx !== -1) {
+                claimedPlayer.influence.splice(cardIdx, 1);
+            }
             state.deck.push(requiredCard);
             state.deck = this.shuffle(state.deck);
             claimedPlayer.influence.push(state.deck.pop()!);
@@ -514,9 +570,17 @@ export class CoupGame implements IGame {
             if (isBlockChallenge) {
                 // Block challenge failed, block succeeds - action is blocked
                 state.pendingAction = undefined;
+                // If the challenger must manually pick a card to lose, we wait. Otherwise advance now.
+                if (!state.pendingCardLoss) {
+                    this.advanceTurn(state);
+                }
             } else {
-                // Action challenge failed, continue with action
-                state.pendingAction = undefined;
+                // Action challenge failed, action continues — resolvePendingAction reads state.pendingAction
+                // If challenger must pick a card, we should theoretically wait? 
+                // Wait, if an action challenge fails, the action should resolve FIRST, so the challenger can lose their card afterwards, OR they lose it first?
+                // The rules say they lose their card, then the action happens. So we continue. 
+                // But if they have to pick a card, pendingCardLoss is set. If we resolvePendingAction now, it might overwrite pendingCardLoss or advanceTurn prematurely.
+                // Actually, `resolvePendingAction` doesn't overwrite `pendingCardLoss` unless it triggers another loss (like Assassinate).
                 this.resolvePendingAction(roomId, state);
             }
         } else {
@@ -541,36 +605,38 @@ export class CoupGame implements IGame {
 
                 // Clear the pending action since both effects are resolved
                 state.pendingAction = undefined;
+                // Only advance if no pending card loss
+                if (!state.pendingCardLoss) {
+                    this.advanceTurn(state);
+                }
             } else {
                 this.loseInfluence(roomId, state, claimedPlayerId);
 
                 if (isBlockChallenge) {
-                    // Block challenge succeeded, block fails - continue with original action
+                    // Block challenge succeeded, block fails - resolve original action immediately!
                     state.pendingAction.blockedBy = undefined;
                     state.pendingAction.blockingCard = undefined;
-                    state.pendingAction.respondedPlayers = [challenger.playerId];
-                    console.log("Updated pendingAction after successful block challenge:", state.pendingAction);
-                    if (this.allPlayersHaveResponded(state)) {
-                        this.resolvePendingAction(roomId, state);
-                    }
-                    // Don't resolve yet, let other players respond to the original action
+                    this.resolvePendingAction(roomId, state);
                 } else {
                     // Action challenge succeeded, action is canceled
                     state.pendingAction = undefined;
                     console.log("Action challenge succeeded, action is canceled.");
-                    this.handleAction(roomId, action, state);
+                    // Advance turn — the action is fully resolved (canceled) - ONLY if no pending card loss
+                    if (!state.pendingCardLoss) {
+                        this.advanceTurn(state);
+                    }
                 }
             }
         }
     }
 
-    private getRequiredCardForAction(actionType: string): CoupCard {
+    private getRequiredCardForAction(actionType: string): CoupCard | null {
         switch (actionType) {
             case "TAX": return "Duke";
             case "ASSASSINATE": return "Assassin";
             case "STEAL": return "Captain";
             case "EXCHANGE": return "Ambassador";
-            default: throw new Error(`No card requirement for ${actionType}`);
+            default: return null; // Actions like FOREIGN_AID, INCOME, COUP have no role claim
         }
     }
 
@@ -638,8 +704,9 @@ export class CoupGame implements IGame {
             console.log("Action is blocked by:", action.blockedBy);
             this.addActionLog(roomId, state, action.blockedBy, "Block", action.fromPlayerId, `blocked ${action.fromPlayerId} with ${action.blockingCard}.`);
             state.pendingAction = undefined;
-            state.pendingCardLoss = undefined;
-            this.advanceTurn(state);
+            if (!state.pendingCardLoss) {
+                this.advanceTurn(state);
+            }
             return;
         }
         const from = state.players.find(p => p.playerId === action.fromPlayerId);
@@ -650,13 +717,17 @@ export class CoupGame implements IGame {
             case "FOREIGN_AID":
                 from.coins += CoupGame.FOREIGN_AID_AMOUNT;
                 this.addActionLog(roomId, state, from.name, "Foreign Aid", undefined, `gained ${CoupGame.FOREIGN_AID_AMOUNT} coins.`);
+                state.pendingAction = undefined;
                 break;
             case "TAX":
                 from.coins += CoupGame.TAX_AMOUNT;
                 this.addActionLog(roomId, state, from.name, "Tax", undefined, `gained ${CoupGame.TAX_AMOUNT} coins from Tax.`);
+                state.pendingAction = undefined;
                 break;
             case "ASSASSINATE":
                 this.addActionLog(roomId, state, from.name, "Assassinate", to!.name, `successfully assassinated ${to!.name}.`);
+                state.pendingAction = undefined;
+                // loseInfluence may set pendingCardLoss if target has >1 card
                 this.loseInfluence(roomId, state, to!.playerId);
                 break;
             case "STEAL":
@@ -664,25 +735,35 @@ export class CoupGame implements IGame {
                 to!.coins -= stolen;
                 from.coins += stolen;
                 this.addActionLog(roomId, state, from.name, "Steal", to!.name, `stole ${stolen} coins from ${to!.name}.`);
+                state.pendingAction = undefined;
                 break;
             case "EXCHANGE":
                 const currentInfluenceCount = from.influence.length;
-                const cardsToDraw = currentInfluenceCount === 1 ? 2 : 2; // Draw 2 cards regardless
+                const cardsToDraw = 2; // Draw 2 cards regardless
                 const drawn: CoupCard[] = [];
                 for (let i = 0; i < cardsToDraw && state.deck.length > 0; i++) {
                     drawn.push(state.deck.pop()!);
                 }
                 const combined: CoupCard[] = [...drawn, ...from.influence];
 
-                if (this.onEvent) {
-                    // In game mode: ask client which cards to keep
+                // Store the combined cards temporarily
+                state.exchangeCards = { playerId: from.playerId, cards: combined, toKeep: currentInfluenceCount };
+
+                if (this.onPlayerEvent) {
+                    // Send exchange cards privately to the specific player only
+                    this.onPlayerEvent(from.playerId, "coup:chooseExchangeCards", {
+                        playerId: from.playerId,
+                        availableCards: combined,
+                        cardsToKeep: currentInfluenceCount
+                    });
+                    return; // wait for client response (turn advances in handleExchangeCards)
+                } else if (this.onEvent) {
+                    // Fallback: broadcast (less secure)
                     this.onEvent(roomId, "coup:chooseExchangeCards", {
                         playerId: from.playerId,
                         availableCards: combined,
                         cardsToKeep: currentInfluenceCount
                     });
-                    // Store the combined cards temporarily in a new state field
-                    state.exchangeCards = { playerId: from.playerId, cards: combined, toKeep: currentInfluenceCount };
                     return; // wait for client response
                 } else {
                     // In test mode: auto-pick first cards
@@ -691,10 +772,13 @@ export class CoupGame implements IGame {
                     state.deck = this.shuffle(state.deck);
                     this.addActionLog(roomId, state, from.name, "Exchange", undefined, "exchanged cards with the deck.");
                 }
+                state.pendingAction = undefined;
                 break;
         }
-        state.pendingAction = undefined;
-        state.pendingCardLoss = undefined;
+
+        if (!state.pendingCardLoss) {
+            this.advanceTurn(state);
+        }
     }
 
 
@@ -703,6 +787,12 @@ export class CoupGame implements IGame {
         const target = state.players.find((p) => p.playerId === targetId);
         if (!target || !target.isAlive) return;
 
+        // If we're already waiting for this player to drop a card, just queue another loss
+        if (state.pendingCardLoss && state.pendingCardLoss.playerId === targetId) {
+            state.pendingCardLoss.amount = (state.pendingCardLoss.amount || 1) + 1;
+            return;
+        }
+
         if (target.influence.length === 1) {
             // auto-lose last card
             const lostCard = target.influence.pop()!;
@@ -710,12 +800,11 @@ export class CoupGame implements IGame {
         } else if (target.influence.length > 1) {
             if (this.onEvent) {
                 // In game mode: ask client which card to lose
+                state.pendingCardLoss = { playerId: targetId, amount: 1 };
                 this.onEvent(roomId, "coup:chooseCardToLose", {
                     playerId: targetId,
                     cards: target.influence,
                 });
-                // Set a flag to indicate we're waiting for card loss
-                state.pendingCardLoss = { playerId: targetId };
                 return; // wait for client response
             } else {
                 // In test mode: auto-lose first card
@@ -729,6 +818,7 @@ export class CoupGame implements IGame {
             this.checkWinner(state);
         }
     }
+
     public loseCard(roomId: string, state: CoupGameState, playerId: string, chosenCard: CoupCard) {
         console.log(`Player ${playerId} chose to lose card: ${chosenCard}`);
         const player = state.players.find((p) => p.playerId === playerId);
@@ -751,9 +841,32 @@ export class CoupGame implements IGame {
             this.checkWinner(state);
         }
 
-        // Clear pending card loss and advance turn
+        // Handle multiple pending card losses (e.g., failed challenge + assassinated)
+        if (state.pendingCardLoss && state.pendingCardLoss.playerId === playerId) {
+            if (state.pendingCardLoss.amount && state.pendingCardLoss.amount > 1) {
+                const remainingToLose = state.pendingCardLoss.amount - 1;
+                state.pendingCardLoss = undefined; // Clear so loseInfluence works fresh
+
+                // re-apply remaining card losses
+                for (let i = 0; i < remainingToLose; i++) {
+                    this.loseInfluence(roomId, state, playerId);
+                }
+
+                // If loseInfluence asked the user again, pendingCardLoss is set and we shouldn't advance yet.
+                // If it auto-lost their last card(s), pendingCardLoss is undefined and we should advance.
+                if (!state.pendingCardLoss && !state.pendingAction) {
+                    this.advanceTurn(state);
+                }
+                return;
+            }
+        }
+
+        // Clear pending card loss if we only had 1
         state.pendingCardLoss = undefined;
-        this.advanceTurn(state);
+        // Only advance turn if there's no remaining pending action
+        if (!state.pendingAction) {
+            this.advanceTurn(state);
+        }
     }
 
     public handleExchangeCards(roomId: string, state: CoupGameState, playerId: string, selectedCards: CoupCard[]) {
@@ -797,22 +910,32 @@ export class CoupGame implements IGame {
         // Add log for completed exchange
         this.addActionLog(roomId, state, player.name, "Exchange", undefined, "exchanged cards with the deck.");
 
-        // Clear exchange state and pending action
+        // Clear exchange state and pending action, then advance turn
         state.exchangeCards = undefined;
         state.pendingAction = undefined;
+        this.advanceTurn(state);
     }
 
     private advanceTurn(state: CoupGameState) {
         // Add turn end indicator before advancing
         this.addTurnEndLog("", state);
 
-        const alivePlayers = state.players.filter(p => p.isAlive);
-        const currentIndex = alivePlayers.findIndex(p => p.playerId === state.currentTurnPlayerId);
-        const nextIndex = (currentIndex + 1) % alivePlayers.length;
-        state.currentTurnPlayerId = alivePlayers[nextIndex].playerId;
+        const allPlayers = state.players;
+        const aliveCount = allPlayers.filter(p => p.isAlive).length;
+        if (aliveCount <= 1) return; // Game over, no need to advance
 
-        // Increment turn number when we cycle back to the first player
-        if (nextIndex === 0 && alivePlayers.length > 1) {
+        let currentIndex = allPlayers.findIndex(p => p.playerId === state.currentTurnPlayerId);
+        let nextIndex = (currentIndex + 1) % allPlayers.length;
+
+        // Keep advancing until we find an alive player
+        while (!allPlayers[nextIndex].isAlive) {
+            nextIndex = (nextIndex + 1) % allPlayers.length;
+        }
+
+        state.currentTurnPlayerId = allPlayers[nextIndex].playerId;
+
+        // Increment turn number when we cycle back to the first player (or past it)
+        if (nextIndex <= currentIndex) {
             state.turnNumber++;
         }
     }

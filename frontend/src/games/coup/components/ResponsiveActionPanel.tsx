@@ -11,6 +11,7 @@ interface ResponsiveActionPanelProps {
   selectedTarget: string | null;
   aliveOpponents: CoupPlayerExtended[];
   pendingAction: PendingAction | null;
+  pendingCardLoss?: { playerId: string } | null;
   setSelectedTarget: (target: string | null) => void;
   onActionClick: (type: string) => void;
   onBlock: () => void;
@@ -26,6 +27,7 @@ export const ResponsiveActionPanel: React.FC<ResponsiveActionPanelProps> = ({
   selectedTarget,
   aliveOpponents,
   pendingAction,
+  pendingCardLoss,
   setSelectedTarget,
   onActionClick,
   onBlock,
@@ -36,7 +38,8 @@ export const ResponsiveActionPanel: React.FC<ResponsiveActionPanelProps> = ({
 }) => {
   const coins = myPlayerState?.coins || 0;
   const isAlive = myPlayerState?.isAlive || false;
-  const canAct = isMyTurn && isAlive && !pendingAction;
+  // Players cannot start new actions if ANY pending action or card loss is active
+  const canAct = isMyTurn && isAlive && !pendingAction && !pendingCardLoss;
   const myInfluences = myPlayerState?.influences || [];
 
   // Simplified single list of all actions

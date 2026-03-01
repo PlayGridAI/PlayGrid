@@ -1,4 +1,5 @@
 // src/games/coup/SimpleCoupUI.tsx
+import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useCoupGame } from "./hooks/useCoupGame";
 import { SimpleGameBoard } from "./components/SimpleGameBoard";
@@ -54,7 +55,10 @@ export default function SimpleCoupUI(): JSX.Element {
     exchangeCardChoice,
     blockCardChoice,
     handleGameClose,
+    returnToLobby,
   } = useCoupGame(roomId);
+
+  const [showExitModal, setShowExitModal] = useState(false);
 
   // Transform players to include influence card objects
   const transformedPlayers: CoupPlayerExtended[] =
@@ -89,12 +93,13 @@ export default function SimpleCoupUI(): JSX.Element {
     index: number,
     isRevealed = false,
   ): InfluenceCard {
+    const prefix = isRevealed ? "rev" : "hid";
     // Map string types to enum values
     switch (influence.type || influence) {
       case "DUKE":
       case "Duke":
         return {
-          id: `${playerId}-${index}`,
+          id: `${prefix}-${playerId}-${index}`,
           type: InfluenceType.DUKE,
           isRevealed: isRevealed,
           isLost: isRevealed,
@@ -102,7 +107,7 @@ export default function SimpleCoupUI(): JSX.Element {
       case "ASSASSIN":
       case "Assassin":
         return {
-          id: `${playerId}-${index}`,
+          id: `${prefix}-${playerId}-${index}`,
           type: InfluenceType.ASSASSIN,
           isRevealed: isRevealed,
           isLost: isRevealed,
@@ -110,7 +115,7 @@ export default function SimpleCoupUI(): JSX.Element {
       case "CAPTAIN":
       case "Captain":
         return {
-          id: `${playerId}-${index}`,
+          id: `${prefix}-${playerId}-${index}`,
           type: InfluenceType.CAPTAIN,
           isRevealed: isRevealed,
           isLost: isRevealed,
@@ -118,7 +123,7 @@ export default function SimpleCoupUI(): JSX.Element {
       case "AMBASSADOR":
       case "Ambassador":
         return {
-          id: `${playerId}-${index}`,
+          id: `${prefix}-${playerId}-${index}`,
           type: InfluenceType.AMBASSADOR,
           isRevealed: isRevealed,
           isLost: isRevealed,
@@ -126,14 +131,14 @@ export default function SimpleCoupUI(): JSX.Element {
       case "CONTESSA":
       case "Contessa":
         return {
-          id: `${playerId}-${index}`,
+          id: `${prefix}-${playerId}-${index}`,
           type: InfluenceType.CONTESSA,
           isRevealed: isRevealed,
           isLost: isRevealed,
         };
       default:
         return {
-          id: `${playerId}-unknown`,
+          id: `${prefix}-${playerId}-unknown`,
           type: InfluenceType.DUKE, // Default to Duke for unknown types
           isRevealed: isRevealed,
           isLost: isRevealed,
@@ -160,10 +165,59 @@ export default function SimpleCoupUI(): JSX.Element {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800">
       {/* Main Game Layout */}
       <div className="container mx-auto px-4 py-6">
+        
+        {/* Header / Top Bar */}
+        <div className="flex justify-between items-center mb-6">
+          <div className="text-white text-xl font-bold bg-slate-800/80 px-4 py-2 rounded-lg border border-slate-600">
+            Room: {roomId}
+          </div>
+          <button
+            onClick={() => {
+                if (winner) {
+                    returnToLobby();
+                } else {
+                    setShowExitModal(true);
+                }
+            }}
+            className="px-4 py-2 bg-red-600/80 hover:bg-red-500 text-white rounded-lg font-semibold border border-red-500/50 transition-colors"
+          >
+            {winner ? "Return to Lobby" : "Exit Game"}
+          </button>
+        </div>
         {/* Error Display */}
         {error && (
           <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-red-900/90 backdrop-blur-sm border border-red-500/50 rounded-lg px-4 py-2 text-red-200 text-sm shadow-lg">
             ⚠️ {error}
+          </div>
+        )}
+
+        {/* Exit Game Modal */}
+        {showExitModal && !winner && (
+          <div className="fixed inset-0 flex items-center justify-center bg-black/75 z-50">
+            <div className="bg-slate-800 p-8 rounded-xl border border-slate-600 max-w-sm w-full text-center shadow-2xl">
+              <div className="text-4xl mb-4">🚪</div>
+              <h3 className="text-xl font-bold text-white mb-2">Leave Game?</h3>
+              <p className="text-gray-300 mb-6 text-sm">
+                You are about to forfeit. You cannot rejoin this room until the current game finishes. Are you sure?
+              </p>
+              <div className="flex justify-center gap-4">
+                <button
+                  onClick={() => setShowExitModal(false)}
+                  className="px-4 py-2 bg-slate-600 hover:bg-slate-500 text-white rounded-lg font-semibold transition-colors w-full"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    setShowExitModal(false);
+                    handleGameClose();
+                  }}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg font-semibold transition-colors w-full"
+                >
+                  Confirm Exit
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -177,9 +231,9 @@ export default function SimpleCoupUI(): JSX.Element {
               </div>
               <div className="text-lg text-white">{winnerName} wins!</div>
               <button
-                onClick={handleGameClose}
-                className="mt-4 px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-semibold transition-colors">
-                Return to Room
+                onClick={returnToLobby}
+                className="mt-4 px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-semibold transition-colors shadow-lg">
+                Return to Lobby
               </button>
             </div>
           </div>
@@ -281,6 +335,13 @@ export default function SimpleCoupUI(): JSX.Element {
 
         {/* Action Panel */}
         <div className="mt-6">
+          {state.pendingCardLoss && state.pendingCardLoss.playerId !== currentPlayer.playerId && (
+            <div className="mb-4 p-3 bg-red-900/60 border border-red-500/50 rounded-lg text-center shadow-lg animate-pulse">
+              <span className="text-red-200 font-semibold text-sm">
+                ⏳ Waiting for <span className="text-white bg-slate-800 px-2 py-0.5 rounded mx-1">{transformedPlayers.find(p => p.playerId === state.pendingCardLoss?.playerId)?.name || "a player"}</span> to choose a card to lose...
+              </span>
+            </div>
+          )}
           <ResponsiveActionPanel
             myPlayerState={
               transformedPlayers.find(
@@ -295,6 +356,7 @@ export default function SimpleCoupUI(): JSX.Element {
                 (p as CoupPlayerExtended),
             )}
             pendingAction={state.pendingAction || null}
+            pendingCardLoss={state.pendingCardLoss || null}
             setSelectedTarget={setSelectedTarget}
             onActionClick={onActionClick}
             onBlock={onBlock}

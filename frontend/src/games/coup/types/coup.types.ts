@@ -42,6 +42,7 @@ export interface CoupGameState {
     turnNumber?: number;
     actionLogs?: ActionLogEntry[];
     pendingAction?: PendingAction;
+    pendingCardLoss?: { playerId: string };
     winner?: string;
 }
 

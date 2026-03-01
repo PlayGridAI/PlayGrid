@@ -24,6 +24,34 @@ export const useSocket = (onEvents?: (socket: Socket) => void) => {
             // Add connection event listeners
             socketInstance.on("connect", () => {
                 console.log("Socket connected:", socketInstance.id);
+
+                // On EVERY connection (fresh or reconnect), check if we need to rejoin a room
+                const storedRoomId = localStorage.getItem("roomId");
+                const storedPlayerRaw = localStorage.getItem("currentPlayer");
+                if (storedRoomId && storedPlayerRaw) {
+                    try {
+                        const storedPlayer = JSON.parse(storedPlayerRaw);
+                        if (storedPlayer?.playerId) {
+                            console.log("Auto-reconnecting to room on connect", {
+                                roomId: storedRoomId,
+                                playerId: storedPlayer.playerId
+                            });
+                            socketInstance.emit("reconnectToRoom", {
+                                roomId: storedRoomId,
+                                playerId: storedPlayer.playerId,
+                                playerName: storedPlayer.name || "Guest"
+                            }, (response: any) => {
+                                if (response?.success) {
+                                    console.log("Auto-reconnect successful", { hasActiveGame: response.hasActiveGame });
+                                } else {
+                                    console.error("Auto-reconnect failed", response?.error);
+                                }
+                            });
+                        }
+                    } catch (e) {
+                        console.error("Failed to parse stored player for auto-reconnect", e);
+                    }
+                }
             });
 
             socketInstance.on("disconnect", (reason) => {
@@ -36,6 +64,7 @@ export const useSocket = (onEvents?: (socket: Socket) => void) => {
 
             socketInstance.on("reconnect", (attemptNumber) => {
                 console.log("Socket reconnected after", attemptNumber, "attempts");
+                // connect event already handles room rejoin
             });
 
             globalSocket = socketInstance;
@@ -49,19 +78,13 @@ export const useSocket = (onEvents?: (socket: Socket) => void) => {
             onEvents(globalSocket);
         }
 
-        // Add page unload listener to properly disconnect
-        const handleBeforeUnload = () => {
-            if (globalSocket) {
-                globalSocket.disconnect();
-                globalSocket = null;
-            }
-        };
+        // Do NOT disconnect on beforeunload — let the server-side
+        // disconnect timeout handle cleanup. Destroying the socket here
+        // prevents reconnection on page refresh.
 
-        window.addEventListener('beforeunload', handleBeforeUnload);
-        
         // Cleanup function
         return () => {
-            window.removeEventListener('beforeunload', handleBeforeUnload);
+            // no-op — we keep globalSocket alive across re-renders
         };
     }, [onEvents]); // Include onEvents in deps to re-register when it changes
 

@@ -65,6 +65,7 @@ export function getPublicRoomsSummary() {
         .map(r => ({
             roomId: r.roomId,
             name: r.name,
+            isPrivate: r.isPrivate,
             playerCount: r.players.length,
             players: r.players,
             maxPlayers: r.maxPlayers,

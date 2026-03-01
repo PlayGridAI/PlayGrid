@@ -1,6 +1,7 @@
 {
   "scripts": {
-    "dev": "concurrently \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\""
+    "dev": "concurrently \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\"",
+    "test:simulation": "cd backend && npx ts-node --transpile-only ../tests/simulation.ts"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",
