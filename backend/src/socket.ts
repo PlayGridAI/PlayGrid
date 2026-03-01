@@ -424,6 +424,12 @@ export function initSocket(io: Server) {
                     return;
                 }
 
+                if (room.players.length < 2) {
+                    socket.emit("game:error", { error: "At least 2 players are required to start the game" });
+                    safeAck(ack, { success: false, error: "Min_players_not_reached" });
+                    return;
+                }
+
                 gameManager.startGame(roomId, gameId, room.players);
                 room.game = {
                     id: gameId,

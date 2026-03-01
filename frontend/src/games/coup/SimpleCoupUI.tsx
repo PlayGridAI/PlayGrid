@@ -57,7 +57,7 @@ export default function SimpleCoupUI(): JSX.Element {
   } = useCoupGame(roomId);
 
   const [showExitModal, setShowExitModal] = useState(false);
-  const [showLogs, setShowLogs] = useState(false);
+  const [showRevealedInfluences, setShowRevealedInfluences] = useState(false);
 
   // Transform players to include influence card objects
   const transformedPlayers: CoupPlayerExtended[] =
@@ -154,7 +154,9 @@ export default function SimpleCoupUI(): JSX.Element {
           <div className="text-lg text-blue-300 mb-4">
             Connecting to game...
           </div>
-          <div className="text-sm text-gray-400">Room: {roomId}</div>
+          <div className="text-sm text-gray-400">
+             Room: <span className="font-mono text-xs ml-1">{roomId?.substring(0, 8)}...</span>
+          </div>
         </div>
       </div>
     );
@@ -167,8 +169,9 @@ export default function SimpleCoupUI(): JSX.Element {
         
         {/* Header / Top Bar */}
         <div className="flex justify-between items-center mb-6">
-          <div className="text-white text-xl font-bold bg-slate-800/80 px-4 py-2 rounded-lg border border-slate-600">
-            Room: {roomId}
+          <div className="text-white text-sm sm:text-lg font-bold bg-slate-800/80 px-3 sm:px-4 py-2 rounded-lg border border-slate-600 flex items-center gap-2">
+            <span>Room:</span>
+            <span className="font-mono text-blue-400 text-xs sm:text-sm">{roomId?.substring(0, 8)}...</span>
           </div>
           <button
             onClick={() => {
@@ -185,7 +188,7 @@ export default function SimpleCoupUI(): JSX.Element {
         </div>
         {/* Error Display */}
         {error && (
-          <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-red-900/90 backdrop-blur-sm border border-red-500/50 rounded-lg px-4 py-2 text-red-200 text-sm shadow-lg">
+          <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 bg-red-900/90 backdrop-blur-sm border border-red-500/50 rounded-lg px-4 py-2 text-red-200 text-sm shadow-lg w-11/12 max-w-sm text-center">
             ⚠️ {error}
           </div>
         )}
@@ -261,37 +264,43 @@ export default function SimpleCoupUI(): JSX.Element {
           />
         )}
 
-        {/* Floating Log Button */}
+        {/* Floating Revealed Influences Button */}
         <button
-          onClick={() => setShowLogs(!showLogs)}
+          onClick={() => setShowRevealedInfluences(!showRevealedInfluences)}
           className="fixed top-24 right-4 z-30 bg-slate-800/90 backdrop-blur border border-slate-600 p-3 rounded-full shadow-[0_4px_15px_rgba(0,0,0,0.5)] text-white hover:scale-105 transition-transform"
         >
-          📜
+          🪦
         </button>
 
-        {/* Action Log Drawer/Modal */}
-        {showLogs && (
-          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setShowLogs(false)}>
+        {/* Revealed Influences Drawer/Modal */}
+        {showRevealedInfluences && (
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm transition-opacity" onClick={() => setShowRevealedInfluences(false)}>
             <div 
               className="bg-slate-900 border-t sm:border border-slate-700 w-full sm:w-[400px] sm:rounded-2xl rounded-t-2xl shadow-2xl overflow-hidden flex flex-col h-[60vh] sm:h-[500px] animate-slide-up"
               onClick={e => e.stopPropagation()}
             >
               <div className="flex justify-between items-center p-4 border-b border-slate-700 bg-slate-800/50">
-                <h3 className="text-white font-bold flex items-center gap-2">📜 Game Log</h3>
-                <button onClick={() => setShowLogs(false)} className="text-gray-400 hover:text-white p-1 text-xl leading-none">
+                <h3 className="text-white font-bold flex items-center gap-2">🪦 Revealed Influences</h3>
+                <button onClick={() => setShowRevealedInfluences(false)} className="text-gray-400 hover:text-white p-1 text-xl leading-none">
                   ✕
                 </button>
               </div>
-              <ActionLogPanel
-                logs={state.actionLogs || []}
-                className="w-full flex-1 border-0 rounded-none bg-transparent"
-              />
+              <div className="overflow-y-auto flex-1 p-4">
+                 <RevealedInfluences
+                   players={transformedPlayers}
+                   currentPlayer={
+                     transformedPlayers.find(
+                       (p) => p.playerId === currentPlayer.playerId,
+                     ) as CoupPlayerExtended
+                   }
+                 />
+              </div>
             </div>
           </div>
         )}
 
         {/* Game Content Container */}
-        <div className="w-full flex flex-col pb-64">
+        <div className="w-full flex flex-col h-[calc(100vh-140px)] pb-48">
           {/* Game Board (Arena) */}
           <div className="mb-6">
             <SimpleGameBoard
@@ -301,16 +310,13 @@ export default function SimpleCoupUI(): JSX.Element {
             />
           </div>
 
-        {/* All Revealed Influences */}
-
-        <RevealedInfluences
-          players={transformedPlayers}
-          currentPlayer={
-            transformedPlayers.find(
-              (p) => p.playerId === currentPlayer.playerId,
-            ) as CoupPlayerExtended
-          }
-        />
+        {/* Inline Action Logs */}
+        <div className="flex-1 w-full bg-slate-900/40 rounded-xl border border-slate-700/50 overflow-hidden mb-2">
+           <ActionLogPanel
+             logs={state.actionLogs || []}
+             className="w-full h-full border-0 rounded-none bg-transparent"
+           />
+        </div>
         {/* <div className="lg:col-span-1">
           <div className="bg-slate-800/60 backdrop-blur-sm rounded-xl border border-slate-600 p-4">
             <h3 className="text-white font-semibold mb-3 text-sm">

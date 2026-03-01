@@ -96,6 +96,16 @@ export const useCoupGame = (roomId: string | undefined): UseCoupGameReturn => {
 
         const handleError = (msg: any) => {
             const errorMessage = typeof msg === 'string' ? msg : msg?.message || 'Unknown error';
+
+            // Handle 404 / Room Not Found errors by clearing cache and routing to lobby
+            if (errorMessage.toLowerCase().includes('not found') || errorMessage.toLowerCase().includes('does not exist')) {
+                console.warn("Room not found, redirecting to lobby...", errorMessage);
+                localStorage.removeItem('roomId');
+                // Only drop the player if we want them to re-register, usually just roomId drop is enough to kick them out
+                navigate('/lobby');
+                return;
+            }
+
             setError(errorMessage);
             setTimeout(() => setError(''), 3000);
         };

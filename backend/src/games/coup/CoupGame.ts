@@ -917,9 +917,6 @@ export class CoupGame implements IGame {
     }
 
     private advanceTurn(state: CoupGameState) {
-        // Add turn end indicator before advancing
-        this.addTurnEndLog("", state);
-
         const allPlayers = state.players;
         const aliveCount = allPlayers.filter(p => p.isAlive).length;
         if (aliveCount <= 1) return; // Game over, no need to advance
@@ -935,7 +932,9 @@ export class CoupGame implements IGame {
         state.currentTurnPlayerId = allPlayers[nextIndex].playerId;
 
         // Increment turn number when we cycle back to the first player (or past it)
+        // Also log the end of the round.
         if (nextIndex <= currentIndex) {
+            this.addTurnEndLog("", state);
             state.turnNumber++;
         }
     }

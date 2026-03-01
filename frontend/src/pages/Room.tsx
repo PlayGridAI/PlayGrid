@@ -266,12 +266,19 @@ export default function Room() {
           )}
         </div>
         {isHost && (
-          <button
-            onClick={handleStartGame}
-            disabled={!selectedGame}
-            className="w-full bg-green-500 text-black font-semibold px-4 py-2 rounded-lg hover:bg-green-400 disabled:opacity-50 active:scale-95 transition">
-            Start Game
-          </button>
+          <div className="space-y-2">
+            <button
+              onClick={handleStartGame}
+              disabled={!selectedGame || players.length < 2}
+              className="w-full bg-green-500 text-black font-semibold px-4 py-2 rounded-lg hover:bg-green-400 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition">
+              Start Game
+            </button>
+            {players.length < 2 && (
+              <p className="text-center text-xs text-yellow-300 animate-pulse">
+                Waiting for at least 2 players to start...
+              </p>
+            )}
+          </div>
         )}
       </div>
 

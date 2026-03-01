@@ -1,5 +1,4 @@
-// src/games/coup/components/ActionLogPanel.tsx
-import React, { useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 
 interface ActionLogEntry {
   id: string;
@@ -79,14 +78,14 @@ export function ActionLogPanel({ logs, className = "" }: ActionLogPanelProps): J
   };
 
   return (
-    <div className={`bg-black/20 backdrop-blur-sm border border-white/10 rounded-lg ${className}`}>
-      <div className="p-3 border-b border-white/10">
+    <div className={`flex flex-col bg-black/20 backdrop-blur-sm border border-white/10 rounded-lg ${className}`}>
+      <div className="p-3 border-b border-white/10 flex-none">
         <h3 className="text-white font-semibold text-sm">Game Log</h3>
       </div>
       
       <div 
         ref={scrollRef}
-        className="h-64 overflow-y-auto p-3 space-y-2 scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent"
+        className="flex-1 overflow-y-auto p-3 space-y-2 scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent min-h-[16rem]"
       >
         {logs.length === 0 ? (
           <div className="text-gray-400 text-sm italic">

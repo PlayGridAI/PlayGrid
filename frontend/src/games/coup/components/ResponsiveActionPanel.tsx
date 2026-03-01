@@ -1,5 +1,4 @@
-// src/games/coup/components/ResponsiveActionPanel.tsx
-import React from "react";
+import React, { useState } from "react";
 import type { CoupPlayerExtended } from "../types/cards.types";
 import type { PendingAction } from "../types/coup.types";
 import { ActionType } from "../types/coup.types";
@@ -36,6 +35,7 @@ export const ResponsiveActionPanel: React.FC<ResponsiveActionPanelProps> = ({
   players,
   currentTurnPlayerId,
 }) => {
+  const [showInfluenceModal, setShowInfluenceModal] = useState(false);
   const coins = myPlayerState?.coins || 0;
   const isAlive = myPlayerState?.isAlive || false;
   // Players cannot start new actions if ANY pending action or card loss is active
@@ -247,37 +247,79 @@ export const ResponsiveActionPanel: React.FC<ResponsiveActionPanelProps> = ({
         )}
 
         {/* Compact Player Status & Influences */}
-        <div className="flex items-center justify-between bg-slate-800/80 rounded-xl p-2.5 border border-slate-600/50 shadow-inner">
-          <div className="flex items-center gap-3">
-            <div className="flex flex-col items-center bg-black/30 rounded-lg px-3 py-1.5">
-              <span className="text-yellow-400 text-sm leading-none mb-1">🪙</span>
-              <span className="text-xl font-bold text-white leading-none">{coins}</span>
-            </div>
-            <div className="flex gap-1.5">
-              {myInfluences.map((influence) => (
-                <div key={influence.id} className="relative scale-90 origin-left">
-                  <InfluenceCard
-                    card={influence}
-                    isHidden={influence.isLost}
-                    isMyCard={true}
-                    size="small"
-                    rotation={360}
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-          
-          <div className="text-right flex flex-col items-end justify-center">
-             <div className="text-xs text-gray-400 font-medium mb-1">Status</div>
+        <div className="flex flex-col items-center bg-slate-800/80 rounded-xl p-2 border border-slate-600/50 shadow-inner relative">
+          {/* Status Badge (Top Right) */}
+          <div className="absolute top-1.5 right-2 flex flex-col items-end">
              <div
-              className={`px-2 py-0.5 rounded text-[10px] font-bold tracking-wider uppercase ${
+              className={`px-2 py-0.5 rounded text-[9px] font-bold tracking-wider uppercase ${
                 isAlive ? "bg-green-600/80 text-green-100" : "bg-red-600/80 text-red-100"
               }`}>
               {isAlive ? "Alive" : "Dead"}
             </div>
           </div>
+
+          {/* Centered Coins, Cards, & Viewer Button */}
+          <div className="flex items-center gap-4 justify-center w-full mt-1">
+            
+            {/* Coin Count */}
+            <div className="flex flex-col items-center bg-black/30 rounded-lg px-4 py-1.5 border border-slate-700/50">
+              <span className="text-yellow-400 text-sm leading-none mb-0.5">🪙</span>
+              <span className="text-xl font-bold text-white leading-none">{coins}</span>
+            </div>
+
+            {/* Card Count */}
+            <div className="flex flex-col items-center bg-black/30 rounded-lg px-4 py-1.5 border border-slate-700/50">
+               <span className="text-red-400 text-sm leading-none mb-0.5">❤️</span>
+               <span className="text-xl font-bold text-white leading-none">
+                  {myInfluences.filter(c => !c.isLost).length}
+               </span>
+            </div>
+            
+            {/* Show Hand Button */}
+            <button
+               onClick={() => setShowInfluenceModal(true)}
+               className="flex items-center gap-2 bg-blue-900/40 hover:bg-blue-800/60 active:scale-95 transition-all text-white rounded-lg px-3 py-1.5 border border-blue-500/50 shadow"
+            >
+               <span className="text-lg">👁️</span>
+               <span className="text-[10px] font-bold tracking-wide uppercase">Hand</span>
+            </button>
+          </div>
         </div>
+
+        {/* Show Influence Modal Override */}
+        {showInfluenceModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-scale-in" onClick={() => setShowInfluenceModal(false)}>
+             <div className="bg-slate-800 border border-slate-600 rounded-2xl p-6 shadow-2xl max-w-sm w-full" onClick={e => e.stopPropagation()}>
+                <div className="flex justify-between items-center mb-6">
+                   <h3 className="text-xl font-bold text-white">Your Hand</h3>
+                   <button onClick={() => setShowInfluenceModal(false)} className="text-gray-400 hover:text-white text-2xl leading-none">✕</button>
+                </div>
+                <div className="flex justify-center gap-4">
+                  {myInfluences.length > 0 ? (
+                    myInfluences.map((influence) => (
+                      <div key={influence.id} className="relative transform hover:scale-105 transition-transform duration-200">
+                        <InfluenceCard
+                          card={influence}
+                          isHidden={influence.isLost}
+                          isMyCard={true}
+                          size="large"
+                          rotation={360}
+                        />
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-gray-400 text-sm italic py-8">No cards left</div>
+                  )}
+                </div>
+                <button 
+                  onClick={() => setShowInfluenceModal(false)}
+                  className="w-full mt-8 py-3 bg-slate-700 hover:bg-slate-600 rounded-xl text-white font-bold transition-colors"
+                >
+                  Close
+                </button>
+             </div>
+          </div>
+        )}
 
         {/* Action Area */}
         {canAct && (
