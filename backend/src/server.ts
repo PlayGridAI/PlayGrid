@@ -6,7 +6,10 @@ import { initSocket } from "./socket";
 import { SERVER_PORT } from "./config";
 
 const app = express();
-app.use(cors({ origin: "http://localhost:5173", credentials: true }));
+
+app.use(cors({
+    origin: "*"
+}));
 app.use(express.json());
 app.get("/health", (_req, res) => res.json({ status: "ok" }));
 
