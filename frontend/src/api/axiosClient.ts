@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const axiosClient = axios.create({
-    baseURL: 'http://localhost:4000', // backend URL
+    baseURL: import.meta.env.VITE_API_URL, // backend URL
 });
 
 export default axiosClient;
